@@ -1,8 +1,8 @@
 <div align="center">
 
-# 📱 Mangile Mobile
+# Mangile Mobile 📱
 
-**Kotlin Multiplatform (KMP)** ve **Compose Multiplatform** ile geliştirilmiş resmi Mangile Android ve iOS mobil uygulaması.
+Official Android & iOS mobile application for the Mangile platform, built with **Kotlin Multiplatform (KMP)** and **Compose Multiplatform**.
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-blue.svg?logo=kotlin)](https://kotlinlang.org)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.7.3-green.svg)](https://www.jetbrains.com/lp/compose-multiplatform/)
@@ -12,68 +12,89 @@
 
 ---
 
-## 📖 Hakkında
+## 📖 About
 
-Mangile Mobile, [Mangile](https://github.com/falsisdev/mangile) web ekosisteminin mobil deneyimidir. Manga, manhwa, manhua ve hafif romanları (light novel) telefon ve tabletlerde en yüksek performans, akıcı animasyonlar ve modern bir arayüzle okumanızı sağlar.
+**Mangile Mobile** brings the official [Mangile](https://github.com/falsisdev/mangile) web ecosystem to mobile devices. It offers a fast, fluid, and native reading experience for Manga, Manhwa, Manhua, and Light Novels on Android and iOS devices.
 
-Kod tabanının **%95'inden fazlası** Android ve iOS arasında ortak (shared) Kotlin ve Jetpack Compose kodu olarak çalışır.
-
----
-
-## ✨ Özellikler
-
-- 📚 **Manga, Manhwa & Light Novel Desteği**: Mangile veritabanındaki tüm popüler ve yeni içerikler.
-- 🖼️ **Gelişmiş Manga & Webtoon Okuyucu**:
-  - **Webtoon Modu**: Dikey, kesintisiz sonsuz kaydırma.
-  - **Sayfalı Mod**: Klasik yatay sayfa çevirme.
-  - **Pinch-to-Zoom**: Çift parmak veya çift dokunuşla akıcı yakınlaştırma/kaydırma.
-- 📖 **Novel Okuyucu (Text Reader)**:
-  - Özelleştirilebilir font boyutu ve satır aralığı.
-  - Font ailesi tercihi (Düz, Serif, Monospace).
-  - Gece ve gündüz okuma konforu.
-- 🔍 **Keşfet & Arama**: Başlığa, türe ve etiketlere ("Ödüllü", "Macera", "Dram" vb.) göre anlık arama ve filtreleme.
-- 🎨 **Mangile Tasarım Sistemi**: Web platformu ile birebir uyumlu Mist/Emerald teması.
+Built with **Kotlin Multiplatform (KMP)** and **Compose Multiplatform**, over 95% of the codebase is shared across Android and iOS platforms.
 
 ---
 
-## 🛠️ Mimari ve Teknolojiler
+## ✨ Features
 
-- **UI**: Compose Multiplatform (Material 3)
-- **Ağ Katmanı**: [Ktor Client](https://ktor.io/) + Darwin (iOS) & OkHttp (Android) motorları
-- **Görsel Yükleme & Önbellek**: [Coil 3](https://coil-kt.github.io/coil/) (Compose Multiplatform)
-- **JSON Serileştirme**: `kotlinx.serialization`
-- **Asenkron Programlama**: `kotlinx.coroutines`
+- 📚 **Manga, Manhwa & Light Novel Support**: Complete access to Mangile library and external database.
+- 🖼️ **Advanced Manga & Webtoon Reader**:
+  - **Webtoon Mode**: Smooth, vertical continuous scrolling with auto-detected format.
+  - **Paged Mode**: Classic horizontal swipe reading.
+  - **Pinch-to-Zoom**: Fluid gesture zooming and panning.
+- 📖 **Novel Reader**:
+  - Customizable typography (Font size, line height, font family).
+  - Sanity PortableText rendering with headings, blockquotes, and styled text.
+- 🔍 **Explore & Search**: Real-time debounced search, format, sort, and tag filtering.
+- 🎨 **Material Design 3 & Material You (Monet)**:
+  - System dynamic wallpaper color theme support (Material You).
+  - Multiple preset accent themes (Emerald, Indigo, Rose, Amber, Ocean).
+  - Dark / Light / System appearance modes.
+- ⚡ **High Performance & Asynchronous Loading**: Progressive UI rendering for instant response.
 
 ---
 
-## 🚀 Başlarken
+## 🛠 Tech Stack
 
-### Gereksinimler
-- macOS (iOS derlemesi için)
-- JDK 17 veya JDK 21
-- Android Studio Ladybug / Koala veya daha yenisi
-- Xcode 15+ (iOS simülatörü için)
+- **Framework**: Kotlin Multiplatform & Compose Multiplatform (Material 3)
+- **Networking**: Ktor Client 3.0 (Ktor Darwin & Ktor OkHttp)
+- **Image Loading**: Coil 3 (Multiplatform)
+- **Serialization**: `kotlinx.serialization`
+- **Asynchronous**: `kotlinx.coroutines`
 
-### Projeyi Klonlayın
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- macOS (for iOS builds)
+- JDK 21
+- Android Studio Ladybug / Koala (or newer)
+- Xcode 15+ (for iOS builds)
+
+### Clone the repository
+
 ```bash
 git clone https://github.com/falsisdev/mangile-mobile.git
 cd mangile-mobile
 ```
 
-### Android Uygulamasını Başlatma
-Android Studio üzerinden projeyi açabilir veya terminalden derleyebilirsiniz:
+### Build & Install Android App
+
 ```bash
 ./gradlew installDebug
 ```
 
-### iOS Uygulamasını Başlatma
-Xcode üzerinden `iosApp/iosApp.xcodeproj` dosyasını açıp simülatörde çalıştırabilirsiniz:
+### Run iOS App
+
 ```bash
 open iosApp/iosApp.xcodeproj
 ```
 
 ---
 
-## 📄 Lisans
+## 📄 License
 
-Bu proje **Apache 2.0 Lisansı** ile lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakabilirsiniz.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👨‍💻 Author
+
+Developed by **Falsis**
+
+GitHub: [github.com/falsisdev](https://github.com/falsisdev)
+
+---
+
+<div align="center">
+
+Made with ❤️ for manga & novel readers.
+
+</div>
