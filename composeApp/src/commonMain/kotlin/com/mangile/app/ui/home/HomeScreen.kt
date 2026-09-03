@@ -20,272 +20,294 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.mangile.app.data.api.MangileApiClient
-import com.mangile.app.data.models.LatestChapterItem
-import com.mangile.app.data.models.LatestTitleItem
-import com.mangile.app.data.models.MangaListItem
+import com.mangile.app.data.api.MangileApi
+import com.mangile.app.data.models.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
-    apiClient: MangileApiClient,
     onTitleClick: (String) -> Unit,
-    onChapterClick: (String, Boolean) -> Unit // isNovel: Boolean
+    onChapterClick: (String, Boolean) -> Unit
 ) {
     var popularManga by remember { mutableStateOf<List<MangaListItem>>(emptyList()) }
     var latestChapters by remember { mutableStateOf<List<LatestChapterItem>>(emptyList()) }
     var latestTitles by remember { mutableStateOf<List<LatestTitleItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+    var taggedTitles by remember { mutableStateOf<Map<String, List<TitleByTagItem>>>(emptyMap()) }
+    var heroIndex by remember { mutableStateOf(0) }
+    val tags = listOf("Ödüllü", "Macera", "Dram", "Fantezi")
 
+    // Performance fix: Launch each request independently so UI populates progressively
     LaunchedEffect(Unit) {
-        isLoading = true
-        popularManga = apiClient.getPopularManga()
-        latestChapters = apiClient.getLatestChapters()
-        latestTitles = apiClient.getLatestTitles()
-        isLoading = false
-    }
-
-    if (isLoading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        launch {
+            try { popularManga = MangileApi.getPopularManga() } catch (e: Exception) {}
         }
-    } else {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(bottom = 32.dp)
-        ) {
-            // Hero Banner Slider
-            if (popularManga.isNotEmpty()) {
-                item {
-                    HeroSliderSection(
-                        items = popularManga.take(6),
-                        onItemClick = { item ->
-                            item.mal_id?.let { onTitleClick(it.toString()) }
-                        }
-                    )
-                }
-            }
-
-            // Son Eklenen Bölümler
-            if (latestChapters.isNotEmpty()) {
-                item {
-                    SectionHeader(title = "Son Eklenen Bölümler")
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(latestChapters) { chapter ->
-                            LatestChapterCard(
-                                chapter = chapter,
-                                onClick = {
-                                    val isNovel = chapter.lightNovel != null
-                                    onChapterClick(chapter._id, isNovel)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Son Eklenen Seriler
-            if (latestTitles.isNotEmpty()) {
-                item {
-                    SectionHeader(title = "Son Eklenen İçerikler")
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(latestTitles) { titleItem ->
-                            LatestTitleCard(
-                                titleItem = titleItem,
-                                onClick = {
-                                    val id = titleItem.myAnimeListId?.toString() ?: titleItem._id
-                                    id?.let { onTitleClick(it) }
-                                }
-                            )
-                        }
-                    }
-                }
+        launch {
+            try { latestChapters = MangileApi.getLatestChapters() } catch (e: Exception) {}
+        }
+        launch {
+            try { latestTitles = MangileApi.getLatestTitles() } catch (e: Exception) {}
+        }
+        launch {
+            tags.forEach { tag ->
+                try {
+                    val result = MangileApi.getTitlesByTag(tag)
+                    taggedTitles = taggedTitles + (tag to result)
+                } catch (e: Exception) {}
             }
         }
     }
-}
 
-@Composable
-fun HeroSliderSection(
-    items: List<MangaListItem>,
-    onItemClick: (MangaListItem) -> Unit
-) {
-    var currentIndex by remember { mutableStateOf(0) }
-    val currentItem = items.getOrNull(currentIndex) ?: return
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .padding(16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onItemClick(currentItem) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        AsyncImage(
-            model = currentItem.anilist_banner_image,
-            contentDescription = currentItem.anilist_title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-
-        // Gradient Karartma Katmanı
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.85f)
+        // Hero Banner
+        if (popularManga.isNotEmpty()) {
+            item {
+                val hero = popularManga[heroIndex % popularManga.size]
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth().height(260.dp)
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { hero.mal_id?.let { onTitleClick(it.toString()) } }
+                ) {
+                    AsyncImage(
+                        model = hero.anilist_banner_image ?: hero.anilist_cover_image,
+                        contentDescription = hero.anilist_title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                            )
                         )
                     )
-                )
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(4.dp)
-            ) {
-                Text(
-                    text = currentItem.mal_type ?: "Manga",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+                    ) {
+                        val typeStr = when {
+                            hero.mal_type?.contains("Manhwa", true) == true -> "Manhwa"
+                            hero.mal_type?.contains("NOVEL", true) == true -> "Hafif Roman"
+                            else -> "Manga"
+                        }
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = typeStr,
+                                fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = hero.anilist_title ?: "",
+                            color = Color.White, fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            hero.anilist_score?.let {
+                                Text(
+                                    text = "★ ${"%.1f".format(it / 10.0)}",
+                                    color = Color(0xFFFFB300),
+                                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            hero.mal_year?.let {
+                                Text(text = it.toString(), color = Color.White.copy(0.7f), fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+                // Hero dots
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    popularManga.take(6).forEachIndexed { i, _ ->
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 3.dp)
+                                .size(if (heroIndex == i) 8.dp else 6.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (heroIndex == i) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(0.3f)
+                                )
+                                .clickable { heroIndex = i }
+                        )
+                    }
+                }
             }
+        }
 
-            Spacer(modifier = Modifier.height(6.dp))
+        // Son Eklenen Bölümler
+        if (latestChapters.isNotEmpty()) {
+            item {
+                SectionTitle("Son Eklenen Bölümler")
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(latestChapters) { ch ->
+                        val cover = ch.lightNovel?.coverImage?.url ?: ch.manga?.coverImage?.url
+                        val series = ch.lightNovel?.title ?: ch.manga?.title ?: "Seri"
+                        val isNovel = ch.lightNovel != null
+                        Column(
+                            modifier = Modifier.width(120.dp)
+                                .clickable { onChapterClick(ch._id, isNovel) }
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth().height(170.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                AsyncImage(
+                                    model = cover, contentDescription = series,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                // Type badge
+                                Surface(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                                    color = if (isNovel) MaterialTheme.colorScheme.secondary
+                                           else MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isNovel) "Roman" else "Manga",
+                                        fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                        color = if (isNovel) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = series, fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                lineHeight = 15.sp
+                            )
+                            Text(
+                                text = "C${ch.volumeNumber?.toInt() ?: 0} B${ch.chapterNumber?.toInt() ?: 0}: ${ch.title ?: ""}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-            Text(
-                text = currentItem.anilist_title ?: "Bilinmeyen Başlık",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+        // Son Eklenen İçerikler
+        if (latestTitles.isNotEmpty()) {
+            item {
+                SectionTitle("Son Oluşturulan İçerikler")
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(latestTitles) { t ->
+                        Column(
+                            modifier = Modifier.width(120.dp)
+                                .clickable { t.myAnimeListId?.let { onTitleClick(it.toString()) } }
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth().height(170.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                AsyncImage(
+                                    model = t.coverImage,
+                                    contentDescription = t.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = t.title ?: "", fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-            if (currentItem.anilist_score != null) {
-                Text(
-                    text = "★ ${(currentItem.anilist_score / 10.0).let { "%.1f".format(it) }}",
-                    color = Color(0xFFFBBF24),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+        // Tag sections
+        tags.forEach { tag ->
+            val items = taggedTitles[tag] ?: emptyList()
+            if (items.isNotEmpty()) {
+                item {
+                    SectionTitle("$tag Türünde Seriler")
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(items) { t ->
+                            Column(
+                                modifier = Modifier.width(120.dp)
+                                    .clickable { t.myAnimeListId?.let { onTitleClick(it.toString()) } }
+                            ) {
+                                Box(
+                                    Modifier.fillMaxWidth().height(170.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    AsyncImage(
+                                        model = t.coverImage?.url,
+                                        contentDescription = t.title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = t.title ?: "", fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Initial empty state padding so the screen is not entirely empty before things load
+        if (popularManga.isEmpty() && latestChapters.isEmpty()) {
+            item {
+                Box(Modifier.fillMaxWidth().height(400.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
             }
         }
     }
 }
 
 @Composable
-fun SectionHeader(title: String) {
+fun SectionTitle(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.ExtraBold,
         color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 12.dp)
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp, end = 16.dp)
     )
-}
-
-@Composable
-fun LatestChapterCard(
-    chapter: LatestChapterItem,
-    onClick: () -> Unit
-) {
-    val coverUrl = chapter.lightNovel?.coverImage?.url ?: chapter.manga?.coverImage?.url
-    val seriesTitle = chapter.lightNovel?.title ?: chapter.manga?.title ?: "Seri"
-
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .clickable { onClick() }
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            AsyncImage(
-                model = coverUrl,
-                contentDescription = seriesTitle,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = seriesTitle,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Text(
-            text = "Bölüm ${chapter.chapterNumber?.toInt() ?: "-"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-fun LatestTitleCard(
-    titleItem: LatestTitleItem,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .clickable { onClick() }
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            AsyncImage(
-                model = titleItem.coverImage?.url,
-                contentDescription = titleItem.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = titleItem.title ?: "Başlıksız",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
 }

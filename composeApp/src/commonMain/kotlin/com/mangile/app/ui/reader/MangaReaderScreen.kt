@@ -12,162 +12,237 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.mangile.app.data.api.MangileApiClient
+import com.mangile.app.data.api.MangileApi
 import com.mangile.app.data.models.ChapterDetail
+import com.mangile.app.data.models.ChapterListItem
+import kotlinx.coroutines.launch
 
-enum class ReadingMode {
-    WEBTOON, // Dikey Sonsuz Kaydırma
-    PAGED    // Yatay Sayfa Sayfa
+enum class ReadingMode(val label: String) {
+    WEBTOON("Webtoon"), PAGED("Sayfalı")
 }
 
 @Composable
 fun MangaReaderScreen(
     chapterId: String,
-    apiClient: MangileApiClient,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onNavigateChapter: (String) -> Unit
 ) {
-    var chapterDetail by remember { mutableStateOf<ChapterDetail?>(null) }
+    var chapter by remember { mutableStateOf<ChapterDetail?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var readingMode by remember { mutableStateOf(ReadingMode.WEBTOON) }
+    var mode by remember { mutableStateOf(ReadingMode.WEBTOON) }
     var showControls by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(chapterId) {
         isLoading = true
-        chapterDetail = apiClient.getChapter(chapterId)
+        chapter = MangileApi.getChapter(chapterId)
+        // Auto-detect webtoon format
+        val tags = chapter?.manga?.tags ?: emptyList()
+        val fmt = chapter?.manga?.format ?: ""
+        if (tags.any { it.lowercase() in listOf("long strip", "webtoon") } || fmt.lowercase().contains("manhwa")) {
+            mode = ReadingMode.WEBTOON
+        }
         isLoading = false
     }
 
     if (isLoading) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         }
-    } else {
-        val detail = chapterDetail
-        if (detail == null || detail.pages.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = "Bu bölüme ait sayfa bulunamadı.", color = Color.White)
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-            ) {
-                // Okuyucu İçeriği
-                if (readingMode == ReadingMode.WEBTOON) {
-                    WebtoonReader(
-                        pages = detail.pages.mapNotNull { it.url },
-                        onTap = { showControls = !showControls }
-                    )
-                } else {
-                    PagedReader(
-                        pages = detail.pages.mapNotNull { it.url },
-                        onTap = { showControls = !showControls }
-                    )
-                }
+        return
+    }
 
-                // Üst Bar Kontrolü
-                AnimatedVisibility(
-                    visible = showControls,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.TopCenter)
+    val ch = chapter
+    if (ch == null || ch.pages.isEmpty()) {
+        Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Sayfa bulunamadı.", color = Color.White)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onBackClick) { Text("Geri Dön") }
+            }
+        }
+        return
+    }
+
+    val pages = ch.pages.mapNotNull { it.url }
+    val siblings = ch.chapters.sortedBy { (it.volumeNumber ?: 0.0) * 10000 + (it.chapterNumber ?: 0.0) }
+    val currentIdx = siblings.indexOfFirst { it._id == chapterId }
+    val prevId = if (currentIdx > 0) siblings[currentIdx - 1]._id else null
+    val nextId = if (currentIdx >= 0 && currentIdx < siblings.size - 1) siblings[currentIdx + 1]._id else null
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        when (mode) {
+            ReadingMode.WEBTOON -> {
+                val listState = rememberLazyListState()
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().clickable { showControls = !showControls }
                 ) {
-                    ReaderTopBar(
-                        title = detail.title ?: "Bölüm ${detail.chapterNumber?.toInt() ?: ""}",
-                        readingMode = readingMode,
-                        onBackClick = onBackClick,
-                        onToggleMode = {
-                            readingMode = if (readingMode == ReadingMode.WEBTOON) {
-                                ReadingMode.PAGED
-                            } else {
-                                ReadingMode.WEBTOON
+                    itemsIndexed(pages) { _, url ->
+                        ZoomableImage(url)
+                    }
+                    // End of chapter navigation
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "Bölüm Sonu", color = Color.White,
+                                fontSize = 18.sp, fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                prevId?.let { id ->
+                                    OutlinedButton(onClick = { onNavigateChapter(id) }) {
+                                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null, tint = Color.White)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Önceki", color = Color.White)
+                                    }
+                                }
+                                nextId?.let { id ->
+                                    Button(
+                                        onClick = { onNavigateChapter(id) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("Sonraki", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.width(4.dp))
+                                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                                    }
+                                }
                             }
                         }
+                    }
+                }
+            }
+            ReadingMode.PAGED -> {
+                val pagerState = rememberPagerState(pageCount = { pages.size })
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize().clickable { showControls = !showControls }
+                ) { pageIdx ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        ZoomableImage(pages[pageIdx])
+                    }
+                }
+                // Page indicator
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp),
+                    color = Color.Black.copy(0.7f), shape = RoundedCornerShape(20.dp)
+                ) {
+                    Text(
+                        "${pagerState.currentPage + 1} / ${pages.size}",
+                        color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                     )
                 }
             }
         }
-    }
-}
 
-@Composable
-fun WebtoonReader(
-    pages: List<String>,
-    onTap: () -> Unit
-) {
-    val listState = rememberLazyListState()
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable { onTap() }
-    ) {
-        itemsIndexed(pages) { index, imageUrl ->
-            ZoomableImage(
-                imageUrl = imageUrl,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
-
-@Composable
-fun PagedReader(
-    pages: List<String>,
-    onTap: () -> Unit
-) {
-    val pagerState = rememberPagerState(pageCount = { pages.size })
-
-    HorizontalPager(
-        state = pagerState,
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable { onTap() }
-    ) { pageIndex ->
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        // Top overlay
+        AnimatedVisibility(
+            visible = showControls, enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            ZoomableImage(
-                imageUrl = pages[pageIndex],
-                modifier = Modifier.fillMaxSize()
-            )
+            Surface(color = Color.Black.copy(0.8f), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp).statusBarsPadding(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri", tint = Color.White)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            ch.manga?.title ?: "", color = Color.White.copy(0.7f),
+                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "C${ch.volumeNumber?.toInt() ?: 0} B${ch.chapterNumber?.toInt() ?: 0}: ${ch.title ?: ""}",
+                            color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    // Mode toggle
+                    Surface(
+                        onClick = { mode = if (mode == ReadingMode.WEBTOON) ReadingMode.PAGED else ReadingMode.WEBTOON },
+                        color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            mode.label, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
         }
+
+        // Bottom navigation overlay
+        AnimatedVisibility(
+            visible = showControls, enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Surface(
+                color = Color.Black.copy(0.8f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp).navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { prevId?.let { onNavigateChapter(it) } },
+                        enabled = prevId != null
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null, tint = if (prevId != null) Color.White else Color.Gray)
+                        Text("Önceki", color = if (prevId != null) Color.White else Color.Gray)
+                    }
+                    Text(
+                        "B${ch.chapterNumber?.toInt() ?: "-"} / ${siblings.size}",
+                        color = Color.White, fontSize = 13.sp
+                    )
+                    TextButton(
+                        onClick = { nextId?.let { onNavigateChapter(it) } },
+                        enabled = nextId != null
+                    ) {
+                        Text("Sonraki", color = if (nextId != null) MaterialTheme.colorScheme.primary else Color.Gray, fontWeight = FontWeight.Bold)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = if (nextId != null) MaterialTheme.colorScheme.primary else Color.Gray)
+                    }
+                }
+            }
+        }
+
+        // Progress bar
+        LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth().height(2.dp).align(Alignment.TopCenter),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent
+        )
     }
 }
 
 @Composable
-fun ZoomableImage(
-    imageUrl: String,
-    modifier: Modifier = Modifier
-) {
+fun ZoomableImage(imageUrl: String, modifier: Modifier = Modifier) {
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
@@ -187,10 +262,8 @@ fun ZoomableImage(
                 }
             }
             .graphicsLayer(
-                scaleX = scale,
-                scaleY = scale,
-                translationX = offsetX,
-                translationY = offsetY
+                scaleX = scale, scaleY = scale,
+                translationX = offsetX, translationY = offsetY
             )
     ) {
         AsyncImage(
@@ -199,52 +272,5 @@ fun ZoomableImage(
             modifier = Modifier.fillMaxWidth(),
             contentScale = ContentScale.FillWidth
         )
-    }
-}
-
-@Composable
-fun ReaderTopBar(
-    title: String,
-    readingMode: ReadingMode,
-    onBackClick: () -> Unit,
-    onToggleMode: () -> Unit
-) {
-    Surface(
-        color = Color.Black.copy(alpha = 0.75f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBackClick) {
-                    Text("←", color = Color.White, fontSize = 20.sp)
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            }
-
-            Button(
-                onClick = onToggleMode,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = if (readingMode == ReadingMode.WEBTOON) "Webtoon" else "Sayfalı",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
-            }
-        }
     }
 }

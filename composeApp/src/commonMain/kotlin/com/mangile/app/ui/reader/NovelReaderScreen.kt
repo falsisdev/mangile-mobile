@@ -6,14 +6,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mangile.app.data.api.MangileApiClient
+import com.mangile.app.data.api.MangileApi
 import com.mangile.app.data.models.ChapterDetail
 
 enum class NovelFont(val family: FontFamily, val label: String) {
@@ -25,181 +32,205 @@ enum class NovelFont(val family: FontFamily, val label: String) {
 @Composable
 fun NovelReaderScreen(
     chapterId: String,
-    apiClient: MangileApiClient,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onNavigateChapter: (String) -> Unit
 ) {
-    var chapterDetail by remember { mutableStateOf<ChapterDetail?>(null) }
+    var chapter by remember { mutableStateOf<ChapterDetail?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Novel Okuma Ayarları
     var fontSize by remember { mutableStateOf(17) }
-    var lineHeightMultiplier by remember { mutableStateOf(1.8f) }
-    var selectedFont by remember { mutableStateOf(NovelFont.SANS) }
-    var showSettingsSheet by remember { mutableStateOf(false) }
+    var lineH by remember { mutableStateOf(1.8f) }
+    var font by remember { mutableStateOf(NovelFont.SANS) }
+    var showSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(chapterId) {
         isLoading = true
-        chapterDetail = apiClient.getChapter(chapterId)
+        chapter = MangileApi.getChapter(chapterId)
         isLoading = false
     }
 
     if (isLoading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         }
-    } else {
-        val detail = chapterDetail
-        Scaffold(
-            topBar = {
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            IconButton(onClick = onBackClick) {
-                                Text("←", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = detail?.title ?: "Roman Bölümü",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 15.sp,
-                                maxLines = 1
-                            )
-                        }
+        return
+    }
 
-                        IconButton(onClick = { showSettingsSheet = !showSettingsSheet }) {
-                            Text("Aa", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
-                        }
+    val ch = chapter ?: return
+    val siblings = ch.chapters.sortedBy { (it.volumeNumber ?: 0.0) * 10000 + (it.chapterNumber ?: 0.0) }
+    val curIdx = siblings.indexOfFirst { it._id == chapterId }
+    val prevId = if (curIdx > 0) siblings[curIdx - 1]._id else null
+    val nextId = if (curIdx in 0 until siblings.size - 1) siblings[curIdx + 1]._id else null
+
+    Scaffold(
+        topBar = {
+            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).statusBarsPadding(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            ch.lightNovel?.title ?: "",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            ch.title ?: "Bölüm",
+                            fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    // Font size buttons
+                    IconButton(onClick = { if (fontSize > 12) fontSize -= 2 }) {
+                        Text("A-", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { if (fontSize < 32) fontSize += 2 }) {
+                        Text("A+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { showSettings = !showSettings }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Ayarlar", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .background(MaterialTheme.colorScheme.background)
+        }
+    ) { padding ->
+        Box(
+            Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)
+        ) {
+            val scrollState = rememberScrollState()
+
+            Column(
+                Modifier.fillMaxSize().verticalScroll(scrollState)
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
             ) {
-                val scrollState = rememberScrollState()
+                // Chapter title
+                Text(
+                    ch.title ?: "",
+                    fontSize = (fontSize + 8).sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = font.family,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(horizontal = 20.dp, vertical = 24.dp)
-                ) {
+                // Sanity blocks
+                val blocks = ch.content
+                if (blocks.isEmpty()) {
                     Text(
-                        text = detail?.title ?: "",
-                        fontSize = (fontSize + 6).sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontFamily = selectedFont.family,
-                        modifier = Modifier.padding(bottom = 20.dp)
+                        "Bu bölüm için metin içeriği bulunamadı.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp
                     )
+                } else {
+                    blocks.forEach { block ->
+                        if (block._type == "block") {
+                            val text = block.children.joinToString("") { it.text ?: "" }
+                            if (text.isBlank()) return@forEach
+                            val style = block.style ?: "normal"
+                            val isH = style.startsWith("h")
+                            val isBQ = style == "blockquote"
 
-                    // Sanity Paragraf Blokları
-                    val blocks = detail?.content ?: emptyList()
-                    if (blocks.isEmpty()) {
-                        Text(
-                            text = "Bu bölüme ait metin içeriği yüklenemedi veya henüz eklenmedi.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 14.sp
-                        )
-                    } else {
-                        blocks.forEach { block ->
-                            val paragraphText = block.children.joinToString("") { it.text ?: "" }
-                            if (paragraphText.isNotBlank()) {
-                                val isHeading = block.style in listOf("h1", "h2", "h3", "h4")
+                            if (isBQ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(0.3f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                                ) {
+                                    Row(Modifier.padding(16.dp)) {
+                                        Box(
+                                            Modifier.width(3.dp).height(40.dp)
+                                                .background(MaterialTheme.colorScheme.primary)
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            text, fontSize = fontSize.sp, lineHeight = (fontSize * lineH).sp,
+                                            fontFamily = font.family, fontStyle = FontStyle.Italic,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else {
                                 Text(
-                                    text = paragraphText,
-                                    fontSize = if (isHeading) (fontSize + 3).sp else fontSize.sp,
-                                    fontWeight = if (isHeading) FontWeight.Bold else FontWeight.Normal,
-                                    lineHeight = (fontSize * lineHeightMultiplier).sp,
-                                    fontFamily = selectedFont.family,
+                                    text = text,
+                                    fontSize = if (isH) (fontSize + 4).sp else fontSize.sp,
+                                    fontWeight = if (isH) FontWeight.Bold else FontWeight.Normal,
+                                    lineHeight = (fontSize * lineH).sp,
+                                    fontFamily = font.family,
                                     color = MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.padding(bottom = 16.dp)
+                                    modifier = Modifier.padding(bottom = if (isH) 20.dp else 14.dp)
                                 )
                             }
                         }
                     }
                 }
 
-                // Alt Ayar Paneli
-                if (showSettingsSheet) {
-                    Card(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Okuma Ayarları", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                IconButton(onClick = { showSettingsSheet = false }) {
-                                    Text("✕", fontSize = 14.sp)
-                                }
+                // End of chapter nav
+                Spacer(Modifier.height(32.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(20.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    OutlinedButton(
+                        onClick = { prevId?.let { onNavigateChapter(it) } },
+                        enabled = prevId != null
+                    ) { Text("← Önceki Bölüm") }
+                    Button(
+                        onClick = { nextId?.let { onNavigateChapter(it) } },
+                        enabled = nextId != null,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) { Text("Sonraki Bölüm →", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                }
+                Spacer(Modifier.height(60.dp))
+            }
+
+            // Settings panel
+            if (showSettings) {
+                Card(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Okuma Ayarları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            IconButton(onClick = { showSettings = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Kapat", tint = MaterialTheme.colorScheme.onSurface)
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Yazı Boyutu Kontrolü
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Yazı Boyutu: ${fontSize}sp", fontSize = 14.sp)
-                                Row {
-                                    Button(
-                                        onClick = { if (fontSize > 12) fontSize -= 2 },
-                                        contentPadding = PaddingValues(horizontal = 12.dp)
-                                    ) {
-                                        Text("-")
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Button(
-                                        onClick = { if (fontSize < 32) fontSize += 2 },
-                                        contentPadding = PaddingValues(horizontal = 12.dp)
-                                    ) {
-                                        Text("+")
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Yazı Tipi
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                NovelFont.entries.forEach { font ->
-                                    FilterChip(
-                                        selected = selectedFont == font,
-                                        onClick = { selectedFont = font },
-                                        label = { Text(font.label) }
-                                    )
-                                }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("Yazı Boyutu: ${fontSize}sp", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Slider(
+                            value = fontSize.toFloat(), onValueChange = { fontSize = it.toInt() },
+                            valueRange = 12f..32f, steps = 9,
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Text("Satır Yüksekliği: ${"%.1f".format(lineH)}x", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Slider(
+                            value = lineH, onValueChange = { lineH = it },
+                            valueRange = 1.2f..2.5f,
+                            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("Yazı Tipi", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            NovelFont.entries.forEach { f ->
+                                FilterChip(
+                                    selected = font == f,
+                                    onClick = { font = f },
+                                    label = { Text(f.label) }
+                                )
                             }
                         }
                     }
