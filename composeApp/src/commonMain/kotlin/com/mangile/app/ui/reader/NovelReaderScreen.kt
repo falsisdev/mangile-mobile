@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,7 +32,7 @@ fun NovelReaderScreen(
     var isLoading by remember { mutableStateOf(true) }
 
     // Novel Okuma Ayarları
-    var fontSize by remember { mutableStateOf(18) }
+    var fontSize by remember { mutableStateOf(17) }
     var lineHeightMultiplier by remember { mutableStateOf(1.8f) }
     var selectedFont by remember { mutableStateOf(NovelFont.SANS) }
     var showSettingsSheet by remember { mutableStateOf(false) }
@@ -66,7 +65,10 @@ fun NovelReaderScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             IconButton(onClick = onBackClick) {
                                 Text("←", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
                             }
@@ -75,7 +77,8 @@ fun NovelReaderScreen(
                                 text = detail?.title ?: "Roman Bölümü",
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 16.sp
+                                fontSize = 15.sp,
+                                maxLines = 1
                             )
                         }
 
@@ -103,20 +106,37 @@ fun NovelReaderScreen(
                     Text(
                         text = detail?.title ?: "",
                         fontSize = (fontSize + 6).sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onBackground,
                         fontFamily = selectedFont.family,
-                        modifier = Modifier.padding(bottom = 24.dp)
+                        modifier = Modifier.padding(bottom = 20.dp)
                     )
 
-                    // Metin Gövdesi
-                    Text(
-                        text = "Bu novel bölümü içeriği Mangile backend ve Sanity üzerinden dinamik olarak render edilmektedir. Okuma deneyiminizi yukarıdaki 'Aa' menüsünden özelleştirebilirsiniz.",
-                        fontSize = fontSize.sp,
-                        lineHeight = (fontSize * lineHeightMultiplier).sp,
-                        fontFamily = selectedFont.family,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    // Sanity Paragraf Blokları
+                    val blocks = detail?.content ?: emptyList()
+                    if (blocks.isEmpty()) {
+                        Text(
+                            text = "Bu bölüme ait metin içeriği yüklenemedi veya henüz eklenmedi.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        blocks.forEach { block ->
+                            val paragraphText = block.children.joinToString("") { it.text ?: "" }
+                            if (paragraphText.isNotBlank()) {
+                                val isHeading = block.style in listOf("h1", "h2", "h3", "h4")
+                                Text(
+                                    text = paragraphText,
+                                    fontSize = if (isHeading) (fontSize + 3).sp else fontSize.sp,
+                                    fontWeight = if (isHeading) FontWeight.Bold else FontWeight.Normal,
+                                    lineHeight = (fontSize * lineHeightMultiplier).sp,
+                                    fontFamily = selectedFont.family,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Alt Ayar Paneli
@@ -130,8 +150,17 @@ fun NovelReaderScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Okuma Ayarları", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Okuma Ayarları", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                IconButton(onClick = { showSettingsSheet = false }) {
+                                    Text("✕", fontSize = 14.sp)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             // Yazı Boyutu Kontrolü
                             Row(
@@ -139,7 +168,7 @@ fun NovelReaderScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Boyut: ${fontSize}sp")
+                                Text("Yazı Boyutu: ${fontSize}sp", fontSize = 14.sp)
                                 Row {
                                     Button(
                                         onClick = { if (fontSize > 12) fontSize -= 2 },

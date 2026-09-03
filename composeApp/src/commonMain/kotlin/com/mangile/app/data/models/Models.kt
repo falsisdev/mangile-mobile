@@ -2,6 +2,7 @@ package com.mangile.app.data.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ImageAsset(
@@ -18,17 +19,29 @@ data class Source(
     val logo: ImageAsset? = null
 )
 
-// Ana sayfada /api/mangaList yanıtı
+// /api/mangaList yanıt zarfı
+@Serializable
+data class MangaListResponse(
+    val code: Int? = null,
+    val data: List<MangaListItem> = emptyList(),
+    val limit: Int? = null,
+    val page: Int? = null
+)
+
+// Ana sayfada /api/mangaList öğesi
 @Serializable
 data class MangaListItem(
     val mal_id: Int? = null,
     val mal_year: Int? = null,
     val mal_type: String? = null,
     val anilist_title: String? = null,
+    val title_romaji: String? = null,
+    val title_english: String? = null,
     val anilist_type: String? = null,
     val anilist_score: Double? = null,
     val anilist_description: String? = null,
     val anilist_banner_image: String? = null,
+    val anilist_cover_image: String? = null,
     val sanity_description: String? = null,
     val has_local_content: Boolean = false
 )
@@ -62,14 +75,33 @@ data class ChapterTitleParent(
     val coverImage: ImageAsset? = null
 )
 
+// Sanity Block (Novel içeriği için)
+@Serializable
+data class SanityChild(
+    val _key: String? = null,
+    val _type: String? = null,
+    val text: String? = null,
+    val marks: List<String> = emptyList()
+)
+
+@Serializable
+data class SanityBlock(
+    val _key: String? = null,
+    val _type: String? = null,
+    val style: String? = null,
+    val children: List<SanityChild> = emptyList()
+)
+
 // /api/chapter Yanıtı
 @Serializable
 data class ChapterDetail(
     val _id: String,
+    val _type: String? = null,
     val title: String? = null,
     val chapterNumber: Double? = null,
     val volumeNumber: Double? = null,
     val pages: List<ImageAsset> = emptyList(),
+    val content: List<SanityBlock> = emptyList(),
     val manga: ChapterTitleRef? = null,
     val lightNovel: ChapterTitleRef? = null,
     val chapters: List<ChapterListItem> = emptyList(),

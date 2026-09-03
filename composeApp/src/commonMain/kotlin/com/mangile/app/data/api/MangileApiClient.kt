@@ -10,7 +10,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 
 class MangileApiClient(
-    val baseUrl: String = "https://mangile.com.tr" // veya yerel testte http://10.0.2.2:2611
+    val baseUrl: String = "https://mangile-backend.onrender.com"
 ) {
     private val client = HttpClient {
         install(ContentNegotiation) {
@@ -22,18 +22,20 @@ class MangileApiClient(
             })
         }
         install(Logging) {
-            level = LogLevel.INFO
+            level = LogLevel.ALL
         }
     }
 
     // Popüler Seriler (Hero Slider)
     suspend fun getPopularManga(limit: Int = 12): List<MangaListItem> {
         return try {
-            client.get("$baseUrl/api/mangaList") {
+            val response: MangaListResponse = client.get("$baseUrl/api/mangaList") {
                 parameter("filterType", "POPULAR")
                 parameter("limit", limit)
             }.body()
+            response.data
         } catch (e: Exception) {
+            println("[HATA] getPopularManga: ${e.message}")
             emptyList()
         }
     }
@@ -43,6 +45,7 @@ class MangileApiClient(
         return try {
             client.get("$baseUrl/api/latestTitles").body()
         } catch (e: Exception) {
+            println("[HATA] getLatestTitles: ${e.message}")
             emptyList()
         }
     }
@@ -52,6 +55,7 @@ class MangileApiClient(
         return try {
             client.get("$baseUrl/api/latestChapters").body()
         } catch (e: Exception) {
+            println("[HATA] getLatestChapters: ${e.message}")
             emptyList()
         }
     }
@@ -63,6 +67,7 @@ class MangileApiClient(
                 parameter("tag", tag)
             }.body()
         } catch (e: Exception) {
+            println("[HATA] getTitlesByTag: ${e.message}")
             emptyList()
         }
     }
@@ -74,6 +79,7 @@ class MangileApiClient(
                 parameter("id", id)
             }.body()
         } catch (e: Exception) {
+            println("[HATA] getTitleDetails: ${e.message}")
             null
         }
     }
@@ -85,6 +91,7 @@ class MangileApiClient(
                 parameter("id", id)
             }.body()
         } catch (e: Exception) {
+            println("[HATA] getChapter: ${e.message}")
             null
         }
     }
